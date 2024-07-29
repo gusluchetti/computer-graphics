@@ -1,11 +1,22 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_events.h>
 #include <SDL2/SDL_video.h>
+#include <cstdio>
 #include <iostream>
+#include <glad/glad.h>
 
 int gScreenHeight = 640;
 int gScreenWidth = 480;
 SDL_Window *glWindow = nullptr;
 SDL_GLContext glContext = nullptr;
+bool gQuit = false;
+
+void GetInfo() {
+    std::cout << "Vendor: " << glGetString(GL_VENDOR) << "\n";
+    std::cout << "Renderer: " << glGetString(GL_RENDERER) << "\n";
+    std::cout << "Version: " << glGetString(GL_VERSION) << "\n";
+    std::cout << "Shading Language: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << "\n";
+}
 
 void InitProgram() {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -33,8 +44,36 @@ void InitProgram() {
     exit(1);
   }
 }
-void MainLoop() {}
-void Cleanup() { SDL_Quit(); }
+
+void Input() {
+  SDL_Event e;
+
+  while (SDL_PollEvent(&e) != 0) {
+    if (e.type == SDL_QUIT) {
+      std::cout << "bye!\n";
+      gQuit = true;
+      break;
+    }
+  }
+}
+
+void PreDraw() {}
+
+void Draw() {}
+
+void MainLoop() {
+  while (!gQuit) {
+    Input();
+    PreDraw();
+    Draw();
+    SDL_GL_SwapWindow(glWindow);
+  }
+}
+
+void Cleanup() {
+  SDL_DestroyWindow(glWindow);
+  SDL_Quit();
+}
 
 int main(int argc, char *argv[]) {
   std::cout << "at main\n";
