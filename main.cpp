@@ -30,7 +30,7 @@ const std::string gFragmentShaderSource =
 
 GLuint gVertexArrayObject = 0;
 GLuint gVertexBufferObject = 0;
-GLuint gGraphicsPipelineShaderProgram = 0;
+GLuint theProgram = 0;
 
 GLuint CompileShader(GLuint type, const std::string &source) {
   std::string shaderSource;
@@ -70,7 +70,7 @@ void MainLoop() {
     glViewport(0, 0, gScreenWidth, gScreenHeight);
     glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    glUseProgram(gGraphicsPipelineShaderProgram);
+    glUseProgram(theProgram);
 
     // draw
     glBindVertexArray(gVertexArrayObject);
@@ -136,16 +136,16 @@ int main(int argc, char *argv[]) {
   glBindVertexArray(0);
   glDisableVertexAttribArray(0);
 
-  GLuint programObject = glCreateProgram();
+  theProgram = glCreateProgram();
   GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, gVertexShaderSource);
   GLuint fragmentShader =
       CompileShader(GL_FRAGMENT_SHADER, gFragmentShaderSource);
 
-  glAttachShader(programObject, vertexShader);
-  glAttachShader(programObject, fragmentShader);
-  glLinkProgram(programObject);
+  glAttachShader(theProgram, vertexShader);
+  glAttachShader(theProgram, fragmentShader);
+  glLinkProgram(theProgram);
 
-  glValidateProgram(programObject);
+  glValidateProgram(theProgram);
 
   MainLoop();
 
