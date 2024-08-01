@@ -125,18 +125,6 @@ private:
     createSyncObjects();
   }
 
-  void cleanupSwapChain() {
-    for (auto framebuffer : m_swapChainFramebuffers) {
-      vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-    }
-
-    for (auto imageView : m_swapChainImageViews) {
-      vkDestroyImageView(m_device, imageView, nullptr);
-    }
-
-    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
-  }
-
   void recreateSwapChain() {
     int width = 0, height = 0;
     glfwGetFramebufferSize(m_window, &width, &height);
@@ -1026,6 +1014,18 @@ private:
     }
 
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+  }
+
+  void cleanupSwapChain() {
+    for (auto framebuffer : m_swapChainFramebuffers) {
+      vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    }
+
+    for (auto imageView : m_swapChainImageViews) {
+      vkDestroyImageView(m_device, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
   }
 
   void cleanup() {
