@@ -1,3 +1,6 @@
+#define GLFW_INCLUDE_VULKAN
+
+#include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -9,8 +12,6 @@
 #include <set>
 #include <vector>
 #include <vulkan/vulkan_core.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
 
 #include <chrono>
 #include <glm/glm.hpp>
@@ -143,6 +144,9 @@ private:
   std::vector<VkDeviceMemory> m_uniformBuffersMemory;
   std::vector<void *> m_uniformBuffersMapped;
 
+  VkDescriptorPool m_descriptorPool;
+  std::vector<VkDescriptorSet> m_descriptorSets;
+
   std::vector<VkCommandBuffer> m_commandBuffers;
   std::vector<VkSemaphore> m_imageAvailableSemaphores;
   std::vector<VkSemaphore> m_renderFinishedSemaphores;
@@ -184,6 +188,8 @@ private:
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
   }
@@ -253,35 +259,35 @@ private:
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
                          VK_SUBPASS_CONTENTS_INLINE);
 
-    {
-      vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        m_graphicsPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      m_graphicsPipeline);
 
-      // NEEDED SINCE WE'VE SPECIFIED VIEWPORT/SCISSOR STATE AS DYNAMIC
-      VkViewport viewport{};
-      viewport.x = 0.0f;
-      viewport.y = 0.0f;
-      viewport.width = static_cast<float>(m_swapChainExtent.width);
-      viewport.height = static_cast<float>(m_swapChainExtent.height);
-      viewport.minDepth = 0.0f;
-      viewport.maxDepth = 1.0f;
-      vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    // NEEDED SINCE WE'VE SPECIFIED VIEWPORT/SCISSOR STATE AS DYNAMIC
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(m_swapChainExtent.width);
+    viewport.height = static_cast<float>(m_swapChainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-      VkRect2D scissor{};
-      scissor.offset = {0, 0};
-      scissor.extent = m_swapChainExtent;
-      vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-      VkBuffer vertexBuffers[] = {m_vertexBuffer};
-      VkDeviceSize offsets[] = {0};
+    VkBuffer vertexBuffers[] = {m_vertexBuffer};
+    VkDeviceSize offsets[] = {0};
 
-      vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-      vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0,
-                           VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-      vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1,
-                       0, 0, 0);
-    }
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_pipelineLayout, 0, 1,
+                            &m_descriptorSets[m_currentFrame], 0, nullptr);
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0,
+                     0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -439,6 +445,57 @@ private:
 
       vkMapMemory(m_device, m_uniformBuffersMemory[i], 0, bufferSize, 0,
                   &m_uniformBuffersMapped[i]);
+    }
+  }
+
+  void createDescriptorPool() {
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr,
+                               &m_descriptorPool) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create descriptor pool!");
+    }
+  }
+
+  void createDescriptorSets() {
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                               m_descriptorSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = m_descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.pSetLayouts = layouts.data();
+
+    m_descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(m_device, &allocInfo,
+                                 m_descriptorSets.data()) != VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate descriptor sets!");
+    }
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      VkDescriptorBufferInfo bufferInfo{};
+      bufferInfo.buffer = m_uniformBuffers[i];
+      bufferInfo.offset = 0;
+      bufferInfo.range = sizeof(UniformBufferObject);
+
+      VkWriteDescriptorSet descriptorWrite{};
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = m_descriptorSets[i];
+      descriptorWrite.dstBinding = 0;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      descriptorWrite.descriptorCount = 1;
+      descriptorWrite.pBufferInfo = &bufferInfo;
+
+      vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
     }
   }
 
@@ -610,7 +667,7 @@ private:
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f; // Optional
     rasterizer.depthBiasClamp = 0.0f;          // Optional
@@ -1037,11 +1094,6 @@ private:
 
     const bool result =
         indices.isComplete() && extensionsSupported && swapChainAdequate;
-    if (result) {
-      std::cout << "SUITABLE\n";
-    } else {
-      std::cout << "NOT suitable\n";
-    }
     return result;
   }
 
@@ -1275,8 +1327,11 @@ private:
     UniformBufferObject ubo{};
     ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
                             glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view =
+        glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                    glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(
-        glm::radians(45.0f),
+        glm::radians(30.0f),
         m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
     // fix for opengl, flip sign of Y axis
     ubo.proj[1][1] *= -1;
@@ -1303,6 +1358,8 @@ private:
       vkDestroyBuffer(m_device, m_uniformBuffers[i], nullptr);
       vkFreeMemory(m_device, m_uniformBuffersMemory[i], nullptr);
     }
+
+    vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
 
     vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
 
