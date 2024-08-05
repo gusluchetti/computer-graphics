@@ -1,5 +1,5 @@
 INCLUDE_DIR = include/
-CFLAGS = -std=c++17 -O2 -I$(INCLUDE_DIR)
+CFLAGS = -std=c++17 -O3 -I$(INCLUDE_DIR)
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 VulkanTest: main.cpp
